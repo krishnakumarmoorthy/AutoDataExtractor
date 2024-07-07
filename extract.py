@@ -13,7 +13,7 @@ data_file_path = "charger_data.txt"
 
 # Open the file with UTF-8 encoding
 data_file = open(data_file_path, "a+", encoding="utf-8")
-MAX_RETRIES = 5
+MAX_RETRIES = 100
 
 def data_collect(string_lines):
     data_file.write(string_lines + "\n")
@@ -41,11 +41,6 @@ def initialize_driver():
     return driver
 
 def restart_app(driver, capabilities):
-    # try:
-    #     if not driver is None:
-    #         driver.quit()
-    # except:
-    #     pass
     try:
         driver.execute_script("mobile: shell", {"command": "am", "args": ["force-stop", capabilities['appPackage']]})
     except Exception as e:
@@ -54,6 +49,7 @@ def restart_app(driver, capabilities):
         driver.execute_script("mobile: shell", {"command": "am", "args": ["start", "-n", f"{capabilities['appPackage']}/{capabilities['appActivity']}"]})
     except Exception as e:
         logging.error(f"Failed to start app: {e}")
+
 def find_station_buttons(driver, wait):
     try:
         return wait.until(
@@ -97,7 +93,7 @@ try:
     while True:
         if driver is None:
             driver = initialize_driver()
-            wait = WebDriverWait(driver, 15)
+            wait = WebDriverWait(driver, 10)
             restart_app(driver, capabilities)
         else:
             restart_app(driver, capabilities)
@@ -113,7 +109,6 @@ try:
                     if retries >= MAX_RETRIES:
                         restart_app(driver, capabilities)
                         retries = 0
-                        break
 
                     station_button = station_buttons[index]
                     timer()
@@ -135,14 +130,14 @@ try:
                     collect_page_contents(driver, wait)
 
                     # Optionally navigate back to the previous screen
-                    driver.back()
+                    if driver.current_activity != capabilities['appActivity']:
+                        driver.back()
                 except (TimeoutException, NoSuchElementException, StaleElementReferenceException) as e:
                     logging.warning(f"Exception encountered: {e}, retrying...")
                     retries += 1
                     if retries >= MAX_RETRIES:
                         restart_app(driver, capabilities)
                         retries = 0
-                        break
                     continue
                 except Exception as e:
                     data_collect(f"Error processing station button {index + 1}: {e}")
@@ -151,17 +146,9 @@ try:
                     if retries >= MAX_RETRIES:
                         restart_app(driver, capabilities)
                         retries = 0
-                        break
                     continue
                 finally:
                     data_collect("!@#$%^&*")
-                    try:
-                        # Ensure we are not on the main menu before trying to go back
-                        if driver.current_activity != capabilities['appActivity']:
-                            driver.back()
-                    except Exception as e:
-                        logging.error(f"Error during back navigation: {e}")
-                        pass
             k += 1
         except Exception as e:
             logging.error(f"Unexpected error: {e}")
@@ -170,9 +157,8 @@ try:
                 restart_app(driver, capabilities)
                 retries = 0
         finally:
-            logging.info("restarting the driver...")
-            restart_app(driver, capabilities)
-
+            logging.info("Restarting the driver...")
+            driver.quit()
             driver = None
 
 finally:
